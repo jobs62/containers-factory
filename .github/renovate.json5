@@ -1,0 +1,17 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["github>jobs62/infra//renovate-config/default.json5"],
+  // digest-pinned base images passed through ARG (docker manager only sees
+  // direct FROM lines; the factory Dockerfiles pin BASE_IMAGE args instead)
+  customManagers: [
+    {
+      customType: "regex",
+      description: "digest-pinned base images in ARG BASE_IMAGE",
+      managerFilePatterns: ["/(^|/)Dockerfile$/"],
+      matchStrings: [
+        "ARG\\s+BASE_IMAGE=(?<depName>ghcr\\.io/[a-z0-9._/-]+):(?<currentValue>[a-z0-9._-]+)@(?<currentDigest>sha256:[a-f0-9]{64})",
+      ],
+      datasourceTemplate: "docker",
+    },
+  ],
+}

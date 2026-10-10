@@ -1,0 +1,103 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "images/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+    paths:
+      - "images/**"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image name under images/ (empty = all)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: set
+        run: |
+          set -eu
+          if [ -n "${{ github.event.inputs.image }}" ]; then
+            dirs="images/${{ github.event.inputs.image }}"
+          else
+            dirs=$(find images -mindepth 1 -maxdepth 1 -type d)
+          fi
+          # push/PR: only images whose files changed in this ref update
+          # (empty `before` on PRs/first push → build all, skip the filter)
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            before="${{ github.event.before }}"
+            if [ -n "$before" ] && [ "$before" != "0000000000000000000000000000000000000000" ]; then
+              changed=$(git diff --name-only "$before" "${{ github.sha }}" | grep '^images/' | cut -d/ -f2 | sort -u || true)
+              filtered=""
+              for d in $dirs; do
+                name=$(basename "$d")
+                if echo "$changed" | grep -qx "$name"; then
+                  filtered="$filtered $d"
+                fi
+              done
+              dirs=$(echo $filtered)
+            fi
+          fi
+          json=$(for d in $dirs; do [ -f "$d/Dockerfile" ] && basename "$d"; done | jq -R . | jq -sc .)
+          echo "matrix={\"image\":$json}" >> "$GITHUB_OUTPUT"
+          echo "discovered: $json"
+
+  build:
+    needs: discover
+    if: ${{ needs.discover.outputs.matrix != '{"image":[]}' }}
+    permissions:
+      contents: read
+      packages: write
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: ${{ github.event_name != 'pull_request' }}
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute tags
+        id: tags
+        run: |
+          set -eu
+          ver=$(cat "images/${{ matrix.image }}/VERSION")
+          image="ghcr.io/${{ github.repository_owner }}/$(echo '${{ matrix.image }}' | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "tags<<TAGS_EOF"
+            echo "$image:$ver"
+            echo "$image:$ver-${{ github.run_number }}"
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "tags: $image:$ver / $image:$ver-${{ github.run_number }}"
+
+      - name: Build${{ github.event_name != 'pull_request' && ' and push' || ' (validation only)' }}
+        uses: docker/build-push-action@v6
+        with:
+          context: images/${{ matrix.image }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
