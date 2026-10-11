@@ -24,10 +24,11 @@ docker run --rm --entrypoint /bin/sh "$IMAGE" -c 'id' | grep -q 'uid=1000' \
 
 echo "== RPC boot test"
 TMP=$(mktemp -d)
+mkdir $TMP/dl
 trap 'rm -rf "$TMP"; docker rm -f "$NAME" >/dev/null 2>&1 || true' EXIT
 
 cat > "$TMP/aria2.conf" <<EOF
-dir=/media/torrents/
+dir=/media
 enable-rpc=true
 rpc-listen-all=true
 rpc-listen-port=6800
@@ -39,8 +40,8 @@ EOF
 docker run -d --name "$NAME" \
   -p "$PORT:6800" \
   -v "$TMP:/config:ro" \
-  -v "$TMP/dl:/media/torrents" \
-  "$IMAGE" >/dev/null
+  -v "$TMP/dl:/media" \
+  "$IMAGE"
 
 RESP=""
 for i in $(seq 1 20); do
