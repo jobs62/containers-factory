@@ -96,8 +96,17 @@ jobs:
         with:
           context: images/${{ matrix.image }}
           push: ${{ github.event_name != 'pull_request' }}
+          # export into the docker daemon only when a smoke test needs it
+          load: ${{ hashFiles(format('images/{0}/smoke-test.sh', matrix.image)) != '' }}
           tags: ${{ steps.tags.outputs.tags }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke test (if the image ships one)
+        if: ${{ hashFiles(format('images/{0}/smoke-test.sh', matrix.image)) != '' }}
+        run: |
+          IMAGE=$(echo "${{ steps.tags.outputs.tags }}" | head -1)
+          export IMAGE SKIP_BUILD=1
+          "images/${{ matrix.image }}/smoke-test.sh"

@@ -27,6 +27,9 @@ images/
   no floating `latest`.
 - **Registry auth**: `GITHUB_TOKEN` with `packages: write` — no PAT involved.
 - **Cache**: GHA cache (`type=gha`) per image.
+- **Smoke tests**: images shipping a `smoke-test.sh` run it after build
+  (the image is exported into the daemon for that; CI tests the exact built
+  image via `IMAGE=<tag> SKIP_BUILD=1`).
 
 ## Renovate
 
@@ -47,5 +50,7 @@ The discovery job picks it up on the next push touching it.
 
 ## Images
 
-- `immich-ml-seeded` — see `images/immich-ml-seeded/README.md` (Immich ML
+- `images/immich-ml-seeded` — see `images/immich-ml-seeded/README.md` (Immich ML
   with models baked into `/cache`, PVC-free).
+- `images/aria2` — see `images/aria2/README.md` (stock aria2c on alpine,
+  successor of the lost gitea image, with RPC smoke test).
