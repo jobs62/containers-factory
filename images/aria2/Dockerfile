@@ -3,7 +3,7 @@
 # git.analphabet.me/droper/aria2 image (see images/aria2/README.md).
 # UID 1000 / GID 2000 match the seedbox deployment securityContext and the
 # fsGroup on the torrents PVC.
-ARG ALPINE_TAG=3.24.2
+ARG ALPINE_TAG=3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 
 FROM alpine:${ALPINE_TAG}
 
